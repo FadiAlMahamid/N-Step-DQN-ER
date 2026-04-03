@@ -1,0 +1,144 @@
+# ===================================================================
+# N-Step DQN with Experience Replay Configuration
+# ===================================================================
+
+# --- Atari Environment Settings ---
+environment:
+  # The Gymnasium environment ID. "NoFrameskip" variant is required
+  # so that AtariPreprocessing can handle frame skipping consistently.
+  name: "BreakoutNoFrameskip-v4"
+
+# --- Reproducibility ---
+# Random seed for NumPy, PyTorch, and the environment.
+# Set to a fixed value for reproducible results.
+seed: 42
+
+# --- Training Loop Settings ---
+training:
+  # Total number of agent steps to train for.
+  # Each step = 1 action taken = 4 raw frames (due to frame skip).
+  # DeepMind 2015 used 12.5M steps (50M frames). 2.5M is a good
+  # balance between training time and performance.
+  num_steps: 2500000
+
+  # Average reward (over plot_window episodes) that triggers early stopping.
+  target_reward: 40
+
+  # How often (in steps) to print progress to the console.
+  print_every: 10000
+
+  # How often (in steps) to save a checkpoint of the model and history.
+  # Set to 0 to disable periodic checkpointing (only saves at the end).
+  checkpoint_every: 100000
+
+  # Window size for computing the moving average of rewards in logs and plots.
+  # Also used for early stopping checks. Higher values = smoother curves.
+  plot_window: 500
+
+  # Number of episodes to run during deployment visualization.
+  deploy_trials: 5
+
+  # Execution mode:
+  #   "new"    - Train from scratch
+  #   "resume" - Load saved model and history, then continue training
+  #   "deploy" - Load saved model and visualize the agent playing
+  mode: "new"
+
+# --- Agent Hyperparameters ---
+agent:
+  # Optimizer for updating network weights.
+  #   "adam"    - Adam; adaptive learning rates per parameter (recommended)
+  #   "rmsprop" - RMSprop; used in the original DeepMind DQN paper
+  optimizer: "adam"
+
+  # Learning rate for the optimizer.
+  learning_rate: 0.00025
+
+  # Discount factor for future rewards in the Bellman equation.
+  gamma: 0.99
+
+  # Loss function for Q-value regression.
+  #   "huber"  - Huber loss (SmoothL1); robust to large TD errors (recommended)
+  #   "mse"    - Mean Squared Error; amplifies large TD errors
+  loss_function: "huber"
+
+  # Maximum norm for gradient clipping (applied per training step).
+  # Prevents large gradients from destabilizing training.
+  grad_clip_norm: 1.0
+
+  # Whether to clip rewards to the range [-1, 1].
+  # Normalizes the learning signal so that large rewards don't produce
+  # outsized gradients. Standard practice from the DeepMind 2015 paper.
+  clip_rewards: true
+
+# --- N-Step Returns ---
+# Controls multi-step bootstrapping. Instead of using a single-step
+# TD target (R + gamma * Q(s', a')), the agent accumulates rewards
+# over N steps before bootstrapping:
+#   target = r_t + gamma*r_{t+1} + ... + gamma^{n-1}*r_{t+n-1} + gamma^n * Q(s_{t+n}, a')
+#
+# Benefits:
+#   - Faster reward propagation (rewards reach earlier states sooner)
+#   - Better credit assignment (less reliance on bootstrapped estimates)
+#   - Trade-off: higher variance as N increases, but lower bias
+n_step:
+  # Number of steps to accumulate rewards before bootstrapping.
+  # n=1 is standard single-step DQN. n=3 is a common choice that
+  # balances bias reduction with variance. Rainbow DQN uses n=3.
+  n: 3
+
+# --- Epsilon-Greedy Exploration ---
+# Unlike Noisy DQN which uses learned noise for exploration,
+# N-Step DQN uses the standard epsilon-greedy strategy.
+# Epsilon decays linearly from start to min over decay_steps.
+epsilon:
+  # Initial exploration rate (100% random actions at the start).
+  start: 1.0
+
+  # Minimum exploration rate after decay is complete.
+  # A small residual epsilon ensures the agent never stops exploring entirely.
+  min: 0.01
+
+  # Number of agent steps over which epsilon decays linearly from start to min.
+  # After this many steps, epsilon stays at min for the rest of training.
+  decay_steps: 1000000
+
+# --- Experience Replay Buffer ---
+# Stores past transitions and provides random mini-batches for training.
+# Breaks temporal correlation between consecutive samples.
+replay_buffer:
+  # Maximum number of transitions stored. Older transitions are
+  # discarded when full (FIFO). DeepMind 2015 used 1M.
+  capacity: 1000000
+
+  # Number of transitions sampled per training step.
+  batch_size: 32
+
+  # Minimum number of transitions in the buffer before learning begins.
+  # During this warmup phase the agent only explores (collects data).
+  # Ensures the first mini-batches are diverse rather than heavily correlated.
+  # DeepMind 2015 used 50,000.
+  learning_starts: 50000
+
+# --- Target Network ---
+# A frozen copy of the policy network used to compute stable TD targets.
+# Periodically updated by copying weights from the policy network.
+target_network:
+  # How often (in steps) to copy policy network weights to target network.
+  # Higher values = more stable targets but slower adaptation.
+  # DeepMind 2015 used 10,000 steps.
+  update_freq: 10000
+
+# --- File Paths ---
+paths:
+  # Directory where all training outputs are saved.
+  results_dir: "nstep_dqn_results"
+
+  # Filename for the saved model weights (.pth).
+  model_filename: "nstep_dqn_model.pth"
+
+  # Filename for the training history (rewards, losses, step count).
+  history_filename: "training_history.npz"
+
+  # Filename for the training progress plot image.
+  plot_filename: "training_plots.png"
